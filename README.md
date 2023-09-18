@@ -7,6 +7,10 @@ A parallel implementation of the SlashBurn vertex ordering algorithm using ips4o
 
 # Compilation and Build
 
+## Cloning
+
+`git clone --recurse-submodules https://github.com/ubc-systopia/parsb.git`
+
 ## Requirements and Dependencies
 
 1. `parsb` was developed and tested using Ubuntu clang version 17.0.0.
