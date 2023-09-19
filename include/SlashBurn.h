@@ -31,6 +31,7 @@ class SlashBurn {
   int n_neighbour_rounds;
   uint32_t k;
   float prec;
+  
   // verify sparse array reductions
   bool verif = false;
 

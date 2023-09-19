@@ -1,8 +1,6 @@
 # parsb
 A parallel implementation of the SlashBurn vertex ordering algorithm using ips4o sort, Afforest, and Spray Block Reductions
 
-
-
 # Repository Structure
 
 # Compilation and Build
@@ -75,6 +73,10 @@ cmake \
 ```
 
 ### Build
+
+```bash
+cmake --build ${PARSB_ROOT_DIR}/build --config Release --target parsb --
+```
 
 
 # Running Parallel SlashBurn

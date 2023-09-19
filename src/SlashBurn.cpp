@@ -1,5 +1,15 @@
 #include "SlashBurn.h"
 
+/**
+ * @brief Construct a new SlashBurn object
+ * 
+ * @param g a gapbs graph
+ * @param n_neighs number of neighbour rounds, a parameter of Afforest
+ * @param p 0.005 by default, repeat SB algorithm until the size of GCC is
+ * k = 0.005n 
+ * @param bitmap bit i is set if vertex i has been deleted
+ * @param nt number of threads
+ */
 SlashBurn::SlashBurn(Graph &g, int n_neighs, float p, Bitmap &bitmap,
                      uint nt) : g(g), bmap(bitmap) {
   prec = p;
@@ -10,7 +20,6 @@ SlashBurn::SlashBurn(Graph &g, int n_neighs, float p, Bitmap &bitmap,
   k = num_nodes * prec;
   if (k == 0) { k = 1; }
   init();
-  fmt::print("k: {}\n", k);
   auto start = std::chrono::high_resolution_clock::now();
 #if TIME == 1
   std::vector<std::pair<uint, uint64_t>> iter_times;
@@ -19,10 +28,11 @@ SlashBurn::SlashBurn(Graph &g, int n_neighs, float p, Bitmap &bitmap,
 #endif
   n_iters = 0;
   while (true) {
-
+#if TIME == 1
     auto iter_start = std::chrono::high_resolution_clock::now();
-
+#endif
     sort_by_degrees();
+
     // if, after sorting, the highest degree vertex is a singleton,
     // the graph is completely fragmented, so break
     if (degrees[vids[0]] == 0) break;
@@ -30,16 +40,15 @@ SlashBurn::SlashBurn(Graph &g, int n_neighs, float p, Bitmap &bitmap,
     compute_decrs(top_k);
     if (verif) verif_decrs(top_k);
     par_decr();
-    // fmt::print("active_vertex_set_size: {}\n", active_vertex_set_size);
-    // fmt::print("spokes_end, hub_start: {} {}\n", spokes_end, hub_start);
+
     // compute connected components
     Afforest();
     if (active_vertex_set_size == 0) break;
-
     compute_cc_sizes();
-    // fmt::print("spokes_end, hub_start: {} {}\n", spokes_end, hub_start);
-
     if (spokes_end == hub_start) break;
+
+    // if, after k-hub removal, there exist a single connected component,
+    // continue
     if (n_components == 1) {
       clear();
       n_iters++;
@@ -78,6 +87,10 @@ SlashBurn::SlashBurn(Graph &g, int n_neighs, float p, Bitmap &bitmap,
   delete[] cc_size_structs;
 }
 
+/**
+ * @brief Reset the component size and degree decrement vector
+ * 
+ */
 void SlashBurn::clear() {
 #pragma omp parallel for
   for (uint32_t i = 0; i < num_nodes; ++i) {
@@ -91,17 +104,25 @@ void SlashBurn::clear() {
   }
 }
 
+/**
+ * @brief 
+ * 
+ * @param final_iter true if this is the final iteration of the SlashBurn algo
+ */
 void SlashBurn::compute_spoke_offsets(bool final_iter) {
 #if TIME == 1
   auto start = std::chrono::high_resolution_clock::now();
 #endif
-  // sort all spokes by their size to compute their global
-  // offset into the perm array
-  std::vector<std::vector<std::pair<uint32_t, uint32_t>>>
-          spokes(num_threads);
+
+  // sort all spokes by their size to compute their global offset into perm
+  std::vector<std::vector<std::pair<uint32_t, uint32_t>>> spokes(num_threads);
   std::vector<Spokes> spokes_vs(num_threads);
   uint32_t n_vertices_in_spokes = 0;
-#pragma omp parallel num_threads(num_threads) reduction(+ : n_vertices_in_spokes)
+
+  // compute the number of vertices per spoke and the total number of vertices
+  // in all spokes
+#pragma omp parallel num_threads(num_threads) \
+        reduction(+ : n_vertices_in_spokes)
   {
     uint tid = omp_get_thread_num();
 #pragma omp for
@@ -109,16 +130,17 @@ void SlashBurn::compute_spoke_offsets(bool final_iter) {
       uint32_t cid = comp[i];
       if (bmap.get_bit(i)) { continue; }
       if (!final_iter && cid == gcc_id) { continue; }
-      // spokes[tid][j].first = i;
       if (cc_sizes[i] > 0) {
         spokes[tid].push_back({i, cc_sizes[i]});
         n_vertices_in_spokes += cc_sizes[i];
       }
     }
   }
-  pvector<uint32_t> spoke_vec(n_vertices_in_spokes);
 
-  std::vector<std::pair<uint32_t, uint32_t>> flat = flatten<std::pair<uint32_t, uint32_t>>(spokes);
+  // flatten s
+  pvector<uint32_t> spoke_vec(n_vertices_in_spokes);
+  std::vector<std::pair<uint32_t, uint32_t>> flat =
+          flatten<std::pair<uint32_t, uint32_t>>(spokes);
   ips4o::parallel::sort(
           flat.begin(), flat.end(),
           [](std::pair<uint32_t, uint32_t> c1,
@@ -127,11 +149,10 @@ void SlashBurn::compute_spoke_offsets(bool final_iter) {
               return c1.first < c2.first;
             return c1.second > c2.second;
           });
-  // fmt::print("flat: {}\n", flat);
 
   //compute offsets into spokes vector
   std::vector<uint32_t> prefix_offset(flat.size() + 1);
-  // fmt::print("prefix_offset: {}\n", prefix_offset);
+
   // compute prefix sum of spoke sizes
   uint32_t accum = 0;
   if (flat.size() < num_threads) {
@@ -176,15 +197,13 @@ void SlashBurn::compute_spoke_offsets(bool final_iter) {
   absl::flat_hash_map<uint32_t, std::vector<uint32_t>> tprivate_offsets;
   // spokes may be split across different threads
   // compute the per-thread offsets for split spokes
-  // fmt::print("spokes_vs: {}\n", spokes_vs);
   compute_offsets_for_split_spokes(spokes_vs, tprivate_offsets);
-  // fmt::print("tprivate_offsets: {}\n", tprivate_offsets);
 
+  // populate perm array with spokes
 #pragma omp parallel num_threads(num_threads)
   {
     uint tid = omp_get_thread_num();
     Spokes &cs = spokes_vs[tid];
-    // populate perm array with spokes
     for (auto &kv: cs) {
       uint32_t comp_id = kv.first;
       absl::flat_hash_set<uint32_t> &spoke_vs = kv.second;
@@ -217,8 +236,10 @@ void SlashBurn::compute_spoke_offsets(bool final_iter) {
   compute_decrs(spoke_vec);
   if (verif) verif_decrs(spoke_vec);
   par_decr();
+#if TIME == 1
   decr_times.push_back(decr_time);
   decr_time = 0;
+#endif
 
 #pragma omp parallel for
   for (uint32_t i = 0; i < n_vertices_in_spokes; ++i) {
@@ -234,7 +255,6 @@ void SlashBurn::compute_spoke_offsets(bool final_iter) {
           std::chrono::duration_cast<time_unit>(end - start).count());
   incr_write_perm();
 #endif
-incr_write_perm();
   // n_iters++;
 }
 
@@ -265,7 +285,6 @@ void SlashBurn::compute_offsets_for_split_spokes(
 
     for (auto &kv: tprivate_offsets) {
       auto cid = kv.first;
-      // auto &private_offsets = kv.second;
       if (ss.find(cid) == ss.end()) {
         // not found
       } else {
@@ -275,8 +294,7 @@ void SlashBurn::compute_offsets_for_split_spokes(
     }
   }
   // compute prefix sum for thread private offsets
-  // todo this is done sequentially - worth to
-  // parallelize?
+  // todo this is done sequentially - worth to parallelize?
   for (auto &kv: tprivate_offsets) {
     auto cid = kv.first;
     uint32_t accum = cc_size_structs[cid].size;
@@ -316,10 +334,17 @@ uint32_t SlashBurn::verif_cc_sizes() {
   return max_size;
 }
 
+/**
+ * @brief Compute the sizes of connected components using map-reduce
+ * Split component ID assignment vector between threads
+ * Each thread maintains a thread-private hash map and computes number of 
+ * vertices in each component
+ * Merge thread-private maps atomically into a global component size vector
+ * 
+ */
 void SlashBurn::map_reduce_cc_sizes() {
   std::vector<absl::flat_hash_map<uint32_t, uint32_t>> counts(num_threads);
 
-  // todo check if gcc
 #pragma omp parallel num_threads(num_threads)
   {
     uint tid = omp_get_thread_num();
@@ -345,9 +370,6 @@ void SlashBurn::map_reduce_cc_sizes() {
       cc_sizes[cid] += n_vs_in_cid;
     }
   }
-  // for (uint tid = 0; tid < num_threads; ++tid) {
-  //   fmt::print("tid: {} {}\n", tid, counts[tid]);
-  // }
 }
 
 /**
@@ -392,7 +414,6 @@ void SlashBurn::compute_cc_sizes() {
   auto mx = get_max_cc_reduction();
   gcc_id = mx.id;
   gcc_size = mx.size;
-  // fmt::print("{} {}\n", gcc_id, gcc_size);
   print_progress();
   if (verif) verif_cc_sizes();
 #if TIME == 1
@@ -405,12 +426,11 @@ void SlashBurn::compute_cc_sizes() {
   }
 }
 
-
-// https://stackoverflow.com/a/67507849
 /**
  * @brief Use a user defined reduction to get the size of the largest 
  * connected component
  * 
+ * (from https://stackoverflow.com/a/67507849)
  * @return SlashBurn::cc_size_t 
  */
 SlashBurn::cc_size_t SlashBurn::get_max_cc_reduction() {
@@ -432,7 +452,12 @@ SlashBurn::cc_size_t SlashBurn::get_max_cc_reduction() {
 }
 
 
-// Place nodes u and v in same component of lower component ID
+/**
+ * @brief Place nodes u and v in same component of lower component ID
+ * 
+ * @param u 
+ * @param v 
+ */
 void SlashBurn::Link(NID u, NID v) {
   NID p1 = comp[u];
   NID p2 = comp[v];
@@ -449,7 +474,10 @@ void SlashBurn::Link(NID u, NID v) {
   }
 }
 
-// Reduce depth of tree for each component to 1 by crawling up parents
+/**
+ * @brief Reduce depth of tree for each component to 1 by crawling up parents
+ * 
+ */
 void SlashBurn::Compress() {
 #pragma omp parallel for schedule(dynamic, 16384)
   for (NID n = 0; n < g.num_nodes(); n++) {
@@ -471,8 +499,8 @@ void SlashBurn::get_active_vertex_set() {
   pvector<pvector<uint32_t>> all_vs(num_threads);
   uint32_t max_results_per_thread = num_nodes / num_threads + 1;
   uint32_t n_active_vertices = 0;
-  // once all active vertices have been identified, the start, end points for each thread need to be stored
-  // (they may not all be equal)
+  // once all active vertices have been identified, the start, end points for
+  // each thread need to be stored (they may not all be equal)
   pvector<uint32_t> bounds(num_threads);
 #pragma omp parallel num_threads(num_threads)
   {
@@ -515,6 +543,13 @@ void SlashBurn::get_active_vertex_set() {
   }
 }
 
+/**
+ * @brief Estimate the largest component ID by sampling component IDs from 
+ * the connected component ID vector
+ * 
+ * @param num_samples 
+ * @return NID 
+ */
 NID SlashBurn::SampleFrequentElement(uint32_t num_samples = 1024) {
   std::unordered_map<NID, int> sample_counts(32);
   using kvp_type = std::unordered_map<NID, int>::value_type;
@@ -523,7 +558,6 @@ NID SlashBurn::SampleFrequentElement(uint32_t num_samples = 1024) {
   get_active_vertex_set();
   active_vertex_set_size = active_vertex_set.size();
   if (active_vertex_set_size == 0) return -1;
-  // fmt::print("active_vertex_set.size(): {}\n", active_vertex_set.size());
   std::mt19937 gen;
   std::uniform_int_distribution<NID> distribution(0, active_vertex_set.size() - 1);
   for (NID i = 0; i < num_samples; i++) {
@@ -536,13 +570,14 @@ NID SlashBurn::SampleFrequentElement(uint32_t num_samples = 1024) {
           sample_counts.begin(), sample_counts.end(),
           [](const kvp_type &a, const kvp_type &b) { return a.second < b.second; });
   float frac_of_graph = static_cast<float>(most_frequent->second) / num_samples;
-  //	std::cout
-  //		<< "Skipping largest intermediate component (ID: " << most_frequent->first
-  //		<< ", approx. " << static_cast<int>(frac_of_graph * 100)
-  //		<< "% of the graph)" << std::endl;
   return most_frequent->first;
 }
 
+/**
+ * @brief Afforest Connectivity Algorithm 
+ * Adapted from gapbs
+ * 
+ */
 void SlashBurn::Afforest() {
 #if TIME == 1
   auto start = std::chrono::high_resolution_clock::now();
@@ -615,7 +650,8 @@ void SlashBurn::Afforest() {
 }
 
 /**
- * @brief Once the degree decrements are computed, iterate over the decrement
+ * @brief Parallel Degree Decrement
+ * Once the degree decrements are computed, iterate over the decrement
  * array in parallel, decrementing each vertex's degree.
  * Each thread maintains a vector of identified singletons, which are written
  * to the final permutation array. 
@@ -630,12 +666,13 @@ void SlashBurn::par_decr() {
 #endif
 #pragma omp parallel num_threads(num_threads)
   {
-    // init a private vector that will store singleton
-    // ids
+    // init a private vector that will store singleton ids
     uint tid = omp_get_thread_num();
     std::vector<uint32_t> &singletons =
             thread_private_singletons[tid];
     uint32_t offset = 0;
+
+    // overallocate thread-private singletons vector to avoid pushback
     singletons.resize(num_nodes / num_threads);
 #pragma omp for schedule(static)
     for (uint32_t i = 0; i < num_nodes; i++) {
@@ -665,16 +702,14 @@ void SlashBurn::par_decr() {
     singleton_offsets[i] = accum;
   }
   uint32_t n_singletons = singleton_offsets[num_threads];
-  // fmt::print("singleton_offsets: {}\n", singleton_offsets);
 
   active_vertex_set_size -= n_singletons;
   spokes_end -= n_singletons;
   for (uint i = 0; i < num_threads + 1; ++i) {
-    // singleton_offsets[i] += spokes_end - 1;
     singleton_offsets[i] += spokes_end;
   }
-  // fmt::print("n_singletons: {}\n", n_singletons);
-  // fmt::print("singleton_offsets: {}\n", singleton_offsets);
+
+  // write singletons to permutation array
 #pragma omp parallel num_threads(num_threads)
   {
     uint tid = omp_get_thread_num();
@@ -748,6 +783,10 @@ void SlashBurn::compute_decrs(pvector<uint32_t> &vertices_to_decrement) {
 #endif
 }
 
+/**
+ * @brief Assign k-highest degree vertices to the permutation array
+ * 
+ */
 void SlashBurn::remove_k_hubs() {
   uint32_t avss_decrement = 0;
 #pragma omp parallel for schedule(static) reduction(+ : avss_decrement)
@@ -762,6 +801,10 @@ void SlashBurn::remove_k_hubs() {
   hub_start += k;
 }
 
+/**
+ * @brief Initialize all data structures and containers
+ * 
+ */
 void SlashBurn::init() {
   bmap.reset();
   degrees.resize(num_nodes);
@@ -770,20 +813,15 @@ void SlashBurn::init() {
   perm.resize(num_nodes);
   comp.resize(num_nodes);
   perm.fill(-1);
-  // perm.fill(0);
   hub_start = 0;
   spokes_end = num_nodes;
   active_vertex_set_size = num_nodes;
   block_reduction_totalsize = ((num_nodes / BWIDTH) + 1) * BWIDTH;
-  fmt::print("block_reduction_totalsize: {}\n", block_reduction_totalsize);
-  fmt::print("BWIDTH: {}\n", BWIDTH);
   uint32_t Alignment = 64;
-  cc_sizes = (uint32_t *) aligned_alloc(Alignment, block_reduction_totalsize * sizeof(uint32_t));
-  // cc_sizes = new uint32_t[block_reduction_totalsize]();
-  decrs = (uint32_t *) aligned_alloc(Alignment, block_reduction_totalsize * sizeof(uint32_t));
-
-  // decrs = new uint32_t[block_reduction_totalsize]();
-
+  cc_sizes = (uint32_t *) aligned_alloc(
+          Alignment, block_reduction_totalsize * sizeof(uint32_t));
+  decrs = (uint32_t *) aligned_alloc(
+          Alignment, block_reduction_totalsize * sizeof(uint32_t));
   cc_size_structs = new cc_size_t[num_nodes]();
 
 #pragma omp parallel for
@@ -801,6 +839,10 @@ void SlashBurn::init() {
   populate_degrees();
 }
 
+/**
+ * @brief Initialize an array of vertex degrees
+ * 
+ */
 void SlashBurn::populate_degrees() {
 #pragma omp parallel for schedule(static)
   for (uint32_t v = 0; v < num_nodes; ++v) {
@@ -810,6 +852,10 @@ void SlashBurn::populate_degrees() {
   }
 }
 
+/**
+ * @brief Use external vertex degree array to sort array of vertex IDs
+ * 
+ */
 void SlashBurn::sort_by_degrees() {
 #if TIME == 1
   auto start = std::chrono::high_resolution_clock::now();
@@ -831,19 +877,42 @@ void SlashBurn::sort_by_degrees() {
 #endif
 }
 
-
+/**
+ * @brief 
+ * 
+ * @param vid vertex ID
+ * @return true if vid has been removed from the graph
+ * @return false otherwise
+ */
 bool SlashBurn::vertex_inactive(uint32_t vid) {
   return bmap.get_bit(vid);
 }
 
+/**
+ * @brief Output progress of SlashBurn algorithm in user-friendly format
+ * 
+ */
 void SlashBurn::print_progress() {
-  fmt::print("i{:<7} [gcc: {:^14}|",
+  fmt::print("i{:<7} | gcc: {:^14}|",
              n_iters, gcc_size);
   fmt::print(" avss: {:^14}| start: {:^14}| end: {:^14} | ",
              active_vertex_set_size, hub_start, spokes_end);
   fmt::print("n_cs: {:^14}|\n", n_components);
 }
 
+
+/**
+ * @brief Write the final SlashBurn vertex IDs using the following format:
+ * 
+ * <number of nodes>
+ * <number of edges>
+ * 0 <vertex 0's new vertex ID>
+ * 1 <vertex 1's new vertex ID>
+ * ...
+ * n-1 <vertex n-1's new vertex ID>
+ * 
+ * @param path 
+ */
 void SlashBurn::write_permutation(std::string path) {
   std::ofstream outfile(path);
   outfile << fmt::format("{}\n", num_nodes);
@@ -866,8 +935,7 @@ void SlashBurn::write_permutation(std::string path) {
 }
 
 /**
- * @brief Incrementally write the permutation array
- * as the algorithm progresses
+ * @brief Incrementally write the permutation array as the algorithm progresses
  * for visualization and debugging
  */
 void SlashBurn::incr_write_perm() {
