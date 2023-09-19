@@ -33,7 +33,7 @@ Use the [atrostan/parsb](https://hub.docker.com/repository/docker/atrostan/parsb
      3. run `parsb` on the given edgelist
 
 # Compilation and Build
-Follow these instructions if you wish to configure, build, and run `parsb` locally.
+Follow these instructions if you want to configure, build, and run `parsb` locally.
 ## Cloning
 
 `git clone --recurse-submodules https://github.com/ubc-systopia/parsb.git`
@@ -108,3 +108,10 @@ cmake --build ${PARSB_ROOT_DIR}/build --config Release --target parsb --
 
 
 # Running Parallel SlashBurn
+
+
+# References
+
+1. ips4o
+2. Afforest
+3. Spray

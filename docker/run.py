@@ -227,7 +227,7 @@ def main(args):
     d = Docker(client, args)
     d.info()
     d.pull()
-    # d.stop_container()
+    d.stop_container()
     d.run_container()
     d.run()
     return
