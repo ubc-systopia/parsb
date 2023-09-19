@@ -16,7 +16,7 @@ FetchContent_Declare(
 
 add_compile_definitions(__TBB_DYNAMIC_LOAD_ENABLED=0)
 FetchContent_MakeAvailable(fmt)
-set(CMAKE_CXX_FLAGS "-O3 -Wall -Wextra -pedantic -march=native -D_REENTRANT=1")
+set(CMAKE_CXX_FLAGS "-O3 -Wall -Wextra -pedantic -march=native -D_REENTRANT=1 -fopenmp")
 message(${CMAKE_CXX_COMPILER_ID})
 
 FetchContent_Declare(

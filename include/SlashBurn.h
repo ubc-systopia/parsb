@@ -8,7 +8,7 @@
 #include "ips4o.hpp"
 #include "pvector.h"
 #include "spray.hpp"
-
+#include <omp.h>
 
 typedef absl::flat_hash_map<
         uint32_t,
