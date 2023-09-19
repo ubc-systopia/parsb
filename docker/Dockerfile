@@ -13,6 +13,12 @@ RUN apt-get update \
 # install clang++-17
 RUN bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
 
+# install omp
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y ${DEPS}
+
+
 ENV CXX="/usr/bin/clang++-17"
 
 # clone parsb

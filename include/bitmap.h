@@ -4,7 +4,7 @@
 #include "platform_atomics.h"
 #include <algorithm>
 #include <cinttypes>
-
+#include <omp.h>
 /*
 GAP Benchmark Suite
 Class:  Bitmap
@@ -28,7 +28,9 @@ class Bitmap {
   }
 
   void reset() {
-    std::fill(dpl::execution::par_unseq, start_, end_, 0);
+    std::fill(
+      // dpl::execution::par_unseq, 
+      start_, end_, 0);
   }
 
   void set_bit(size_t pos) {
