@@ -1,7 +1,5 @@
 #ifndef GAPBS_SB_BITMAP_H
 #define GAPBS_SB_BITMAP_H
-#include <oneapi/dpl/algorithm>
-#include <oneapi/dpl/execution>
 
 #include "platform_atomics.h"
 #include <algorithm>
