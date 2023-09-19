@@ -25,8 +25,7 @@ Use the [atrostan/parsb](https://hub.docker.com/repository/docker/atrostan/parsb
       --output-path "./data/graphs/sb"  \
       --p 0.005 \
       --num-threads 8 \
-      --block-width 65536 \
-      --time-execution
+      --block-width 65536 
    ```
    This will:  
      1. pull docker image from [atrostan/parsb](https://hub.docker.com/repository/docker/atrostan/parsb/general) (if not already pulled)
