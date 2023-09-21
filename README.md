@@ -22,7 +22,7 @@ The image is created using this [Dockerfile](./docker/Dockerfile).
    ```bash
    python -m venv ./docker/venv
    source ./docker/venv/bin/activate
-   pip install -r requirements.txt
+   pip install -r docker/requirements.txt
    ```
 2. Run parsb  
    The following will:  
