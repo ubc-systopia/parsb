@@ -935,6 +935,33 @@ void SlashBurn::write_permutation(std::string path) {
 }
 
 /**
+ * @brief Use the slashburn ordering to translate the edges of the graph
+ * Write the translated edgelist to output path
+ * @param path 
+ */
+void SlashBurn::translate_edge_list(std::string path) {
+  std::ofstream outfile(path);
+
+  pvector<std::pair<uint32_t, uint32_t>> el(g.num_edges());
+  uint64_t k = 0;
+  for (uint32_t u = 0; u < g.num_nodes(); u++) {
+    uint32_t src = perm[u];
+    for (auto v: g.out_neigh(u)) {
+      uint32_t dest = perm[v];
+      el[k++] = {src, dest};
+    }
+  }
+  ips4o::parallel::sort(el.begin(), el.end());
+
+  for (const auto &e: el) {
+    outfile << e.first << " " << e.second << "\n";
+  }
+
+
+  outfile.close();
+}
+
+/**
  * @brief Incrementally write the permutation array as the algorithm progresses
  * for visualization and debugging
  */

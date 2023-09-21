@@ -3,11 +3,80 @@ import argparse
 import multiprocessing
 from pathlib import Path
 import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 # docker constants
 DOCKER_USER_NAME = "atrostan"
 DOCKER_REPO = "parsb"
 DOCKER_TAG = "latest"
+
+# don't plot adjacency matrices with more than this many vertices
+MAX_N_VERTICES_PLOT = 10_000
+
+
+def plot_edgelists(el_path, mp_path, plt_path):
+    """Read a graph's edgelist into a 2D numpy array representing the
+    adjacency matrix of the graph
+    Read a vertex ordering mapping
+    Relabel the edges of the graph using the vertex ordering
+    Plot both (isomorphic) adjacency matrices
+
+    Args:
+        el_path (str): path to edge list
+        mp_path (str): path to vertex ordering
+
+    Returns:
+        np.array: graph's adjacency matrix
+    """
+    arr = pd.read_csv(
+        el_path, sep=" ", header=None, names=["src", "dest"], index_col=False
+    ).values
+
+    mp = pd.read_csv(
+        mp_path,
+        sep=" ",
+        skiprows=2,
+        header=None,
+        names=["old", "new"],
+        index_col=False,
+    ).values
+    n = int(np.max(arr) + 1)
+    if n > MAX_N_VERTICES_PLOT:
+        print(f"Skipping plots of adjacency matrices for verification.")
+        print(f"Graph has {n} vertices > {MAX_N_VERTICES_PLOT}.")
+        return
+
+    mat = np.zeros((n, n))
+    map_mat = np.zeros((n, n))
+    m = len(arr)
+    for i in range(len(arr)):
+        src = int(arr[i][0])
+        dest = int(arr[i][1])
+        mat[src, dest] = 1
+        mp_u = mp[src][1]
+        mp_v = mp[dest][1]
+        map_mat[mp_v, mp_u] = 1
+
+    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(8, 4))
+    ax1.spy(mat, markersize=1)
+    ax2.spy(map_mat, markersize=1)
+    ax1.set_title("Original")
+    ax2.set_title("SlashBurn")
+    for ax in [ax1, ax2]:
+        ax.set_xlim(0, n)
+        ax.set_ylim(0, n)
+        ax.set_aspect("equal", "datalim")
+        ax.invert_yaxis()
+    plt.tight_layout()
+
+    print(f"Plotting Original and SlashBurn adjacency matrices at:\n\t {plt_path}")
+    plt.savefig(plt_path, dpi=200)
+    plt.cla()
+    plt.close()
+
+    return
 
 
 def get_parent_dir(file_path):
@@ -48,8 +117,7 @@ class Docker:
         self.input_args = _input_args
         self.set_default_params()
         self.parse_fnames()
-        # get directory that stores edgelist
-        # (to mount into docker)
+        # get directory that stores edgelist (to mount into docker)
         self.graph_dir = get_parent_dir(self.graph_path)
         self.mounts.append(
             docker.types.Mount(
@@ -74,9 +142,7 @@ class Docker:
             "NUM_THREADS": self.num_threads,
         }
 
-    def set_default_params(
-        self,
-    ):
+    def set_default_params(self):
         if self.input_args.percent:
             self.percent = self.input_args.percent
         else:
@@ -101,9 +167,10 @@ class Docker:
         self.output_path = self.input_args.output_path
         return
 
-    def info(
-        self,
-    ):
+    def print_sep(self):
+        print(f"-" * 86)
+
+    def info(self):
         """Display the parameters for this run of parsb"""
         desc_strs = {
             "Graph Edgelist Path": self.graph_path,
@@ -117,32 +184,24 @@ class Docker:
         def print_aligned_info(desc_str, val):
             print(f"{desc_str : <30}{val}")
 
-        print(f"-" * 86)
         print(f"parsb run Parameters: \n")
 
         for k, v in desc_strs.items():
             print_aligned_info(k, v)
-        print(f"-" * 86)
+        self.print_sep()
 
         return
 
-    def parse_fnames(
-        self,
-    ):
+    def parse_fnames(self):
         self.graph_fname = get_filename(self.graph_path)
         self.order_fname = get_filename(self.output_path)
         return
 
-    def pull(
-        self,
-    ):
+    def pull(self):
         ret = self.client.images.pull(repository=self.docker_repo, tag=self.docker_tag)
-        print(f"{ret = }")
         return
 
-    def container_running(
-        self,
-    ):
+    def container_running(self):
         """Check if the parsb container is already running"""
         clist = self.client.containers.list()
         for c in clist:
@@ -151,74 +210,47 @@ class Docker:
 
         return False
 
-    def get_parsb_container(
-        self,
-    ):
+    def get_parsb_container(self):
         clist = self.client.containers.list()
-        print(f"{clist = }")
         for c in clist:
             if c.name == self.container_name:
                 return c
 
         return None
 
-    def stop_container(
-        self,
-    ):
+    def stop_container(self):
         container = self.get_parsb_container()
         if container:
             container.stop()
             container.remove()
         return
 
-    def run_container(
-        self,
-    ):
-        """if already running, stop parsb docker container,
-        and remove it
-        (re)run container, mounting
+    def start_container(self):
+        """if parsb container not already running,
+        start container, mounting directory that stores input graph
         """
-
+        img_name = f"{self.docker_repo}:{self.docker_tag}"
         if not self.container_running():
+            print(f"Starting {self.container_name} from {img_name} image..")
             container = self.client.containers.run(
-                image=f"{self.docker_repo}:{self.docker_tag}",
+                image=img_name,
                 detach=True,
                 tty=True,
                 name=self.container_name,
                 mounts=self.mounts,
             )
-            print(f"{container = }")
             return container
         return None
 
-    def run(
-        self,
-    ):
+    def run(self):
         container = self.get_parsb_container()
-        print(f"{container = }")
         if not container:
             return
         run_cmd = ["/bin/bash", "/root/parsb/docker/run.sh"]
         ret = container.exec_run(cmd=run_cmd, environment=self.docker_env)
-        print(f"{ret = }")
+        output = ret.output.decode("utf-8")
+        [print(l) for l in output.split("\n")]
 
-        return
-
-    def configure(
-        self,
-    ):
-        return
-
-    def build(
-        self,
-    ):
-        return
-
-    def compile(
-        self,
-    ):
-        self.configure()
-        self.build()
         return
 
 
@@ -227,9 +259,18 @@ def main(args):
     d = Docker(client, args)
     d.info()
     d.pull()
-    d.stop_container()
-    d.run_container()
+    # d.stop_container()
+    if not d.container_running():
+        d.start_container()
+    else:
+        print(f"{d.container_name} already running..")
     d.run()
+
+    if args.plot_verify:
+        plot_path = os.path.join(d.graph_dir, f"{d.graph_fname}.plot.png")
+        plot_edgelists(d.graph_path, d.output_path, plot_path)
+        return
+
     return
 
 
@@ -241,7 +282,7 @@ if __name__ == "__main__":
         description=argparse_desc, formatter_class=argparse.RawTextHelpFormatter
     )
 
-    parser.add_argument("-g", "--graph-path", required=True, help="path to edgelist")
+    parser.add_argument("-f", "--graph-path", required=True, help="path to edgelist")
 
     parser.add_argument(
         "-o", "--output-path", required=True, help="path to store slashburn ordering"
@@ -273,6 +314,14 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         help="if set, each subroutine of parsb will be timed for debugging",
     )
+
+    parser.add_argument(
+        "--plot-verify",
+        action=argparse.BooleanOptionalAction,
+        help="if set plot the original adjacency matrix and "
+        "slashburn adjacency matrix",
+    )
+
     args = parser.parse_args()
 
     main(args)

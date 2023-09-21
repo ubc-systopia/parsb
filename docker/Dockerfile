@@ -5,6 +5,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get upgrade -y 
 
+# libtbb-dev required for ips4o
 ENV DEPS="cmake ninja-build git ca-certificates lsb-release wget software-properties-common gnupg libtbb-dev" 
 RUN apt-get update \
     && apt-get upgrade -y \

@@ -38,6 +38,8 @@ int main(int argc, char *argv[]) {
   uint32_t num_nodes = g.num_nodes();
   uint num_threads = cli.num_threads();
   uint32_t k = num_nodes * percent;
+  fmt::print("{} vertices\n", num_nodes);
+  fmt::print("{} undirected edges\n", g.num_edges());
   info(num_threads, k, percent);
   SlashBurn sb = SlashBurn(g, n_neighbour_rounds, percent, bmap, num_threads);
   sb.write_permutation(cli.out_filename());

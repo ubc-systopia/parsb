@@ -102,6 +102,7 @@ class SlashBurn {
   void print_progress();
   void clear();
   void write_permutation(std::string path);
+  void translate_edge_list(std::string path);
   void map_reduce_cc_sizes();
   void incr_write_perm();
 
