@@ -2,13 +2,13 @@
 A parallel implementation of the SlashBurn vertex ordering algorithm using OpenMP, ips4o sort, Afforest, and Spray Block Reductions
 
 # Contents
-1. [Running `parsb` in Docker](#running-parsb-in-docker)
-2. [Running `parsb` Locally](#running-parsb-locally)
-3. [`parsb` Parameters](#parsb-parameters)
+1. [Running parsb in Docker](#running-parsb-in-docker)
+2. [Running parsb Locally](#running-parsb-locally)
+3. [parsb Parameters](#parsb-parameters)
 
 
-# Running `parsb` in Docker
-Use the [atrostan/parsb](https://hub.docker.com/repository/docker/atrostan/parsb/general) Docker image  to run `parsb`.  
+# Running parsb in Docker
+Use the [atrostan/parsb](https://hub.docker.com/repository/docker/atrostan/parsb/general) Docker image  to run parsb.  
 The image is created using this [Dockerfile](./docker/Dockerfile).
 ## Requirements
 | Name   | Version   |
@@ -24,13 +24,13 @@ The image is created using this [Dockerfile](./docker/Dockerfile).
    source ./docker/venv/bin/activate
    pip install -r requirements.txt
    ```
-2. Run `parsb`  
+2. Run parsb  
    The following will:  
      1. pull docker image from [atrostan/parsb](https://hub.docker.com/repository/docker/atrostan/parsb/general) (if not already pulled)
-     2. (re)compile `parsb` using the input arguments
-     3. run `parsb` on the given edgelist  
+     2. (re)compile parsb using the input arguments
+     3. run parsb on the given edgelist  
 
-   (See [`parsb` Parameters](#parsb-parameters) for a description of parameters)
+   (See [parsb Parameters](#parsb-parameters) for a description of parameters)
    ```bash
    python docker/run.py \
       --graph-path "./data/graphs/librec-ciaodvd-trust.net" \
@@ -40,20 +40,20 @@ The image is created using this [Dockerfile](./docker/Dockerfile).
       --block-width 65536 \
       --plot-verify
    ```
-   If the input graph contains less than 10,000 vertices, you can verify the output of `parsb` by passing the optional `--plot-verify` flag.  
+   If the input graph contains less than 10,000 vertices, you can verify the output of parsb by passing the optional `--plot-verify` flag.  
    This will plot the original graph and the SlashBurn adjacency matrices side-by-side, and save the plot in the same directory as the original edgelist.  
    e.g.
    ![adj-mats](./data/graphs/librec-ciaodvd-trust.net.plot.png)
 
-# Running `parsb` Locally
-Follow these instructions if you want to configure, build, and run `parsb` locally.
+# Running parsb Locally
+Follow these instructions if you want to configure, build, and run parsb locally.
 
 ## Cloning
 
 `git clone --recurse-submodules https://github.com/ubc-systopia/parsb.git`
 
 ## Requirements and Dependencies
-`parsb` was developed and tested using Ubuntu clang version 17.0.0.
+parsb was developed and tested using Ubuntu clang version 17.0.0.
 
 | Name   | Version   |
 | ------ | --------- |
@@ -126,7 +126,7 @@ cmake --build ${PARSB_ROOT_DIR}/build --config Release --target parsb --
     -p 0.005 \
     -t 8
 ```
-`parsb` prints the following information per iteration:
+parsb prints the following information per iteration:
 - `i`: Iteration number
 - `gcc`: Size of the Giant Connected Component (GCC)
 - `avss`: Active Vertex Set Size - the number of vertices remaining in the graph
@@ -134,7 +134,7 @@ cmake --build ${PARSB_ROOT_DIR}/build --config Release --target parsb --
 - `end`: offset into end of the permutation array
 - `n_cs`: number of spokes (connected components that are _not_ the GCC)
 
-# `parsb` Parameters
+# parsb Parameters
 
 ## Compile Time
 
@@ -152,7 +152,7 @@ experiment by setting to few multiples of size of L2 cache.
 
 ### `TIME`
 True or False; Default: False.  
-If True, time the execution of each subroutine in every iteration of `parsb`, namely:  
+If True, time the execution of each subroutine in every iteration of parsb, namely:  
 Degree sort, Afforest, Spoke-Sizing, Spoke-Sorting, and Degree-Decrement.
 
 
@@ -161,7 +161,7 @@ Degree sort, Afforest, Spoke-Sizing, Spoke-Sorting, and Degree-Decrement.
 ### `-f, --graph-path`
 Path to input edgelist.   
 **Important**  
- `parsb` assumes the input edgelist meets the following requirement:  
+ parsb assumes the input edgelist meets the following requirement:  
  - Given a graph with $n$ vertices, vertex IDs are in the range $[0, n)$  
  You can use the `compress` utility from [rhubarb](https://github.com/ubc-systopia/rhubarb) to ensure your input graph meets this requirement.
 ### `-s, `
@@ -183,7 +183,7 @@ n - 1 <vertex n-1's new vertex ID>
 SlashBurn removes $k$ hubs per iteration from the graph,  
 Where $k = pn$, $p=$`percent`, and $n$ is the number of vertices in the graph.
 ### `-t, --num-threads`
-How many threads to use for `parsb`.  
+How many threads to use for parsb.  
 The number of threads in all `omp` parallel regions are set using this parameter.  
 e.g. 
 ```c++
@@ -201,7 +201,7 @@ This repository contains the following folders and files:
   - `librec-ciaodvd-trust.net` - a sample directed graph: [`librec-ciaodvd-trust`](http://konect.cc/networks/librec-ciaodvd-trust/) from [Konect](http://konect.cc/)
   - `librec-ciaodvd-trust.net.plot.png` - plot of original and SlashBurn adjacency matrices
   - `librec-ciaodvd-trust.net.sb` - SlashBurn ordering
-- `docker/` - Dockerfile, python requirements, and scripts for running `parsb` in Docker
+- `docker/` - Dockerfile, python requirements, and scripts for running parsb in Docker
 - `include/` - C++ headers (adapted from [gapbs]([gapbs](https://github.com/sbeamer/gapbs)))
 - `install/` - Installation directory for [abseil](https://abseil.io/)
 - `ips4o/` - ips4o submodule
