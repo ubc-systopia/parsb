@@ -368,3 +368,6 @@ r*hs/
 
 config.yaml
 scratch/
+
+./data/graphs/librec-ciaodvd-trust.net.plot.png
+./data/graphs/librec-ciaodvd-trust.sb

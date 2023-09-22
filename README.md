@@ -24,21 +24,29 @@ The image is created using this [Dockerfile](./docker/Dockerfile).
    source ./docker/venv/bin/activate
    pip install -r docker/requirements.txt
    ```
-2. Run parsb  
+
+2. Build parsb in Docker container  
    The following will:  
      1. pull docker image from [atrostan/parsb](https://hub.docker.com/repository/docker/atrostan/parsb/general) (if not already pulled)
      2. (re)compile parsb using the input arguments
-     3. run parsb on the given edgelist  
+   (See [parsb Compile Time Parameters](#compile-time) for a description of parameters)
+   ```bash
+   python docker/build.py --block-width 32768
+   ```
 
-   (See [parsb Parameters](#parsb-parameters) for a description of parameters)
+3. Run parsb  
+   The following will run parsb on the given edgelist  
+
+   (See [parsb Runtime Parameters](#runtime) for a description of input parameters)
+
+
    ```bash
    python docker/run.py \
       --graph-path "./data/graphs/librec-ciaodvd-trust.net" \
       --output-path "./data/graphs/librec-ciaodvd-trust.sb"  \
       -p 0.005 \
       --num-threads 8 \
-      --block-width 65536 \
-      --plot-verify
+      --plot-verify 
    ```
    If the input graph contains less than 10,000 vertices, you can verify the output of parsb by passing the optional `--plot-verify` flag.  
    This will plot the original graph and the SlashBurn adjacency matrices side-by-side, and save the plot in the same directory as the original edgelist.  
@@ -53,7 +61,7 @@ Follow these instructions if you want to configure, build, and run parsb locally
 `git clone --recurse-submodules https://github.com/ubc-systopia/parsb.git`
 
 ## Requirements and Dependencies
-parsb was developed and tested using Ubuntu clang version 17.0.0.
+parsb was developed and tested using Ubuntu clang version 17.0.0 and Ubuntu 22.04.3.
 
 | Name   | Version   |
 | ------ | --------- |
@@ -143,12 +151,12 @@ Unused. Required by Spray compilation. Default = 1024. (Safe to Ignore)
 
 ### `BWIDTH`
 
-Spray Hyperparameter;  
+Spray Hyperparameter.
 Size of Spray `BlockReduction` - used in degree-decrement operation.  
 _"`BlockReduction` privatizes the original locations lazily by dividing the array into statically sized blocks that are then privatized individually on demand."_  
-Default: 65536; 
+Default: 65536,
 Recommended: 
-experiment by setting to few multiples of size of L2 cache.
+experiment by setting to few multiples of size of L2 cache.  
 
 ### `TIME`
 True or False; Default: False.  
