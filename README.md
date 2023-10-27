@@ -50,7 +50,7 @@ The image is created using this [Dockerfile](./docker/Dockerfile).
    ```
    If the input graph contains less than 10,000 vertices, you can verify the output of parsb by passing the optional `--plot-verify` flag.  
    This will plot the original graph and the SlashBurn adjacency matrices side-by-side, and save the plot in the same directory as the original edgelist.  
-   e.g.
+   e.g.,
    ![adj-mats](./data/graphs/librec-ciaodvd-trust.net.plot.png)
 
 # Running parsb Locally
